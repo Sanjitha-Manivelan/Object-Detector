@@ -1,0 +1,154 @@
+#include <math.h>
+
+
+const int trigPin = 6;
+const int echoPin = 7;
+const int speakerPin = 12;
+const int calibrateButtonPin = 2;
+const int powerButtonPin = 3;
+
+
+const float RATIO_THRESHOLD = 0.25;          
+const int AVERAGE_WINDOW = 5;
+const unsigned long COOLDOWN_MS = 500;
+
+
+float calibratedDistance = -1;
+bool calibrateButtonPrev = false;
+bool powerButtonPrev = false;
+bool isDeviceOn = false;
+
+
+float readings[AVERAGE_WINDOW];
+int readingIndex = 0;
+bool bufferFilled = false;
+
+
+bool postureBad = false;
+unsigned long lastBeepTime = 0;
+
+
+void setup() {
+ pinMode(trigPin, OUTPUT);
+ pinMode(echoPin, INPUT);
+ pinMode(speakerPin, OUTPUT);
+ pinMode(calibrateButtonPin, INPUT_PULLUP);
+ pinMode(powerButtonPin, INPUT_PULLUP);
+
+
+ Serial.begin(9600);
+ Serial.println("🔋 Device OFF. Press power button to turn ON.");
+}
+
+
+float readDistance() {
+ digitalWrite(trigPin, LOW);
+ delayMicroseconds(2);
+ digitalWrite(trigPin, HIGH);
+ delayMicroseconds(10);
+ digitalWrite(trigPin, LOW);
+ long duration = pulseIn(echoPin, HIGH);
+ return duration * 0.034 / 2;
+}
+
+
+void beepWarning() {
+ tone(speakerPin, 1000, 300);
+ delay(400);
+ tone(speakerPin, 1200, 300);
+ delay(400);
+ noTone(speakerPin);
+}
+
+
+float averageReading() {
+ float sum = 0;
+ for (int i = 0; i < AVERAGE_WINDOW; i++) {
+   sum += readings[i];
+ }
+ return sum / AVERAGE_WINDOW;
+}
+
+
+void loop() {
+ bool powerPressed = digitalRead(powerButtonPin) == LOW;
+ if (powerPressed && !powerButtonPrev) {
+   isDeviceOn = !isDeviceOn;
+   Serial.println(isDeviceOn ? "✅ Device ON" : "⛔ Device OFF");
+   tone(speakerPin, isDeviceOn ? 880 : 440, 200);
+   delay(250);
+   noTone(speakerPin);
+ }
+ powerButtonPrev = powerPressed;
+
+
+ if (!isDeviceOn) {
+   delay(100);
+   return;
+ }
+
+
+ float d = readDistance();
+ readings[readingIndex] = d;
+ readingIndex = (readingIndex + 1) % AVERAGE_WINDOW;
+ if (readingIndex == 0) bufferFilled = true;
+
+
+ bool calibratePressed = digitalRead(calibrateButtonPin) == LOW;
+ if (calibratePressed && !calibrateButtonPrev) {
+   calibratedDistance = d;
+   Serial.print("📌 Calibrated baseline = ");
+   Serial.print(calibratedDistance);
+   Serial.println(" cm");
+
+
+   tone(speakerPin, 880, 200);
+   delay(250);
+   tone(speakerPin, 988, 200);
+   delay(250);
+   noTone(speakerPin);
+
+
+   bufferFilled = false;
+   readingIndex = 0;
+   postureBad = false;
+ }
+ calibrateButtonPrev = calibratePressed;
+
+
+ if (calibratedDistance > 0 && bufferFilled) {
+   float avg = averageReading();
+   float ratioChange = abs(avg - calibratedDistance) / calibratedDistance;
+
+
+   Serial.print("Avg = ");
+   Serial.print(avg);
+   Serial.print(" cm | Baseline = ");
+   Serial.print(calibratedDistance);
+   Serial.print(" cm | Δ Ratio = ");
+   Serial.println(ratioChange, 3);
+
+
+   if (ratioChange > RATIO_THRESHOLD) {
+     if (!postureBad) {
+       Serial.println("Obstruction Warning");
+       postureBad = true;
+       lastBeepTime = 0;  // trigger immediately
+     }
+     if (millis() - lastBeepTime > COOLDOWN_MS) {
+       Serial.println("Obstruction still there");
+       beepWarning();
+       lastBeepTime = millis();
+     }
+   } else {
+     if (postureBad) {
+       Serial.println("Obstruction removed. ");
+       postureBad = false;
+     }
+   }
+ }
+
+
+ delay(200);
+}
+
