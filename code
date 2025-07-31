@@ -37,7 +37,7 @@ void setup() {
 
 
  Serial.begin(9600);
- Serial.println("🔋 Device OFF. Press power button to turn ON.");
+ Serial.println("Device OFF. Press power button to turn ON.");
 }
 
 
@@ -74,7 +74,7 @@ void loop() {
  bool powerPressed = digitalRead(powerButtonPin) == LOW;
  if (powerPressed && !powerButtonPrev) {
    isDeviceOn = !isDeviceOn;
-   Serial.println(isDeviceOn ? "✅ Device ON" : "⛔ Device OFF");
+   Serial.println(isDeviceOn ? "Device ON" : "Device OFF");
    tone(speakerPin, isDeviceOn ? 880 : 440, 200);
    delay(250);
    noTone(speakerPin);
@@ -97,7 +97,7 @@ void loop() {
  bool calibratePressed = digitalRead(calibrateButtonPin) == LOW;
  if (calibratePressed && !calibrateButtonPrev) {
    calibratedDistance = d;
-   Serial.print("📌 Calibrated baseline = ");
+   Serial.print("Calibrated baseline = ");
    Serial.print(calibratedDistance);
    Serial.println(" cm");
 
@@ -133,7 +133,7 @@ void loop() {
      if (!postureBad) {
        Serial.println("Obstruction Warning");
        postureBad = true;
-       lastBeepTime = 0;  // trigger immediately
+       lastBeepTime = 0;
      }
      if (millis() - lastBeepTime > COOLDOWN_MS) {
        Serial.println("Obstruction still there");
